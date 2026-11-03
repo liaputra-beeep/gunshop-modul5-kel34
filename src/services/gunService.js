@@ -1,13 +1,14 @@
+// src/services/gunService.js
 import { apiClient, IS_SUPABASE } from '../config/api'
+import { resolveGunImage } from '../utils/helpers'
+import { cachedQuery, invalidateQuery } from '../utils/queryCache'
 
 // ---------------------------------------------------------------------------
-// Normalizer — standardizes product shape whether received from Supabase
-// (public.products) or from the university API (/api/v1/recipes).
+// Normalizer
 // ---------------------------------------------------------------------------
 export const normalizeProduct = (item) => {
   if (!item) return null
 
-  // Resolve specifications from Supabase `specs` (text array) or API `ingredients`
   let specsList = []
   if (Array.isArray(item.specs)) {
     specsList = item.specs.map((s, idx) => {
@@ -20,11 +21,7 @@ export const normalizeProduct = (item) => {
             quantity: s.substring(colonIndex + 1).trim(),
           }
         }
-        return {
-          id: `spec-${idx}`,
-          name: 'Specification',
-          quantity: s.trim(),
-        }
+        return { id: `spec-${idx}`, name: 'Specification', quantity: s.trim() }
       }
       return s
     })
@@ -32,11 +29,13 @@ export const normalizeProduct = (item) => {
     specsList = item.ingredients
   }
 
-  // Resolve steps
   const stepsList =
     Array.isArray(item.steps) && item.steps.length > 0
       ? item.steps
-      : ['Verify firearm is completely unloaded and point in safe direction.', 'Inspect receiver and mechanism for maintenance.']
+      : [
+          'Verify firearm is completely unloaded and point in safe direction.',
+          'Inspect receiver and mechanism for maintenance.',
+        ]
 
   return {
     ...item,
@@ -47,47 +46,51 @@ export const normalizeProduct = (item) => {
     caliber: item.caliber || 'Standard',
     price: Number(item.price ?? item.cook_time ?? 0),
     description: item.description || '',
-    image_url: item.image_url || item.image || '/guns/pistol.svg',
-    image: item.image_url || item.image || '/guns/pistol.svg',
+    image_url: resolveGunImage(item),
+    image: resolveGunImage(item),
     ingredients: specsList,
     steps: stepsList,
+    deleted_at: item.deleted_at ?? null,
   }
 }
 
 // ---------------------------------------------------------------------------
-// GunService — wraps backend CRUD endpoints.
-// Supports both Supabase PostgREST table (/rest/v1/products) and
-// standard REST API (/api/v1/recipes).
+// GunService
 // ---------------------------------------------------------------------------
 class GunService {
   /**
-   * Fetch a paginated, filterable list of products.
+   * Ambil daftar produk (di-cache 60 detik).
+   * params.archived = true -> hanya produk yang diarsipkan
    */
   async getGuns(params = {}) {
+    const key = `guns:list:${JSON.stringify(params)}`
+    return cachedQuery(key, () => this._fetchGuns(params))
+  }
+
+  async _fetchGuns(params = {}) {
     if (IS_SUPABASE) {
       const queryParts = ['select=*']
+
+      // soft delete: default hanya yang aktif
+      queryParts.push(params.archived ? 'deleted_at=not.is.null' : 'deleted_at=is.null')
 
       if (params.search) {
         queryParts.push(`name=ilike.*${encodeURIComponent(params.search)}*`)
       }
-
       if (params.category && params.category !== 'All') {
         queryParts.push(`type=eq.${encodeURIComponent(params.category)}`)
       }
-
       if (params.sort_by) {
         const order = params.order === 'desc' ? 'desc' : 'asc'
         queryParts.push(`order=${encodeURIComponent(params.sort_by)}.${order}`)
       } else {
         queryParts.push('order=created_at.desc')
       }
-
       if (params.limit) {
         queryParts.push(`limit=${params.limit}`)
       }
 
-      const queryString = queryParts.join('&')
-      const data = await apiClient.get(`/rest/v1/products?${queryString}`)
+      const data = await apiClient.get(`/rest/v1/products?${queryParts.join('&')}`)
       const list = Array.isArray(data) ? data.map(normalizeProduct) : []
 
       return {
@@ -102,30 +105,38 @@ class GunService {
     }
 
     // Fallback: university REST API
+    const { archived, ...rest } = params
     const clean = Object.fromEntries(
-      Object.entries(params).filter(([, v]) => v !== '' && v != null),
+      Object.entries(rest).filter(([, v]) => v !== '' && v != null),
     )
-    return apiClient.get('/api/v1/recipes', { params: clean })
+    const res = await apiClient.get('/api/v1/recipes', { params: clean })
+    const list = Array.isArray(res?.data) ? res.data : []
+    const filtered = list.filter((g) => (archived ? g.deleted_at : !g.deleted_at))
+    return { ...res, data: filtered }
   }
 
-  /**
-   * Fetch a single product by ID.
-   */
+  /** Daftar arsip (soft-deleted). */
+  async getArchivedGuns() {
+    return this.getGuns({ archived: true })
+  }
+
+  /** Ambil satu produk (di-cache). */
   async getGunById(id) {
-    if (IS_SUPABASE) {
-      const data = await apiClient.get(`/rest/v1/products?id=eq.${id}&select=*`)
-      if (Array.isArray(data) && data.length > 0) {
-        return { success: true, data: normalizeProduct(data[0]) }
+    return cachedQuery(`guns:item:${id}`, async () => {
+      if (IS_SUPABASE) {
+        const data = await apiClient.get(`/rest/v1/products?id=eq.${id}&select=*`)
+        if (Array.isArray(data) && data.length > 0) {
+          return { success: true, data: normalizeProduct(data[0]) }
+        }
+        throw new Error('Hardware item not found.')
       }
-      throw new Error('Hardware item not found.')
-    }
-    return apiClient.get(`/api/v1/recipes/${id}`)
+      return apiClient.get(`/api/v1/recipes/${id}`)
+    })
   }
 
-  /**
-   * Create a new product.
-   */
+  /** Buat produk baru. */
   async createGun(data) {
+    let result
     if (IS_SUPABASE) {
       const specsArray = Array.isArray(data.ingredients)
         ? data.ingredients.map((i) => `${i.name}: ${i.quantity}`)
@@ -144,18 +155,20 @@ class GunService {
       }
 
       const res = await apiClient.post('/rest/v1/products', payload, {
-        headers: { Prefer: 'return=representation' },
+        headers: { 'Prefer': 'return=representation' },
       })
       const created = Array.isArray(res) ? res[0] : res
-      return { success: true, data: normalizeProduct(created) }
+      result = { success: true, data: normalizeProduct(created) }
+    } else {
+      result = await apiClient.post('/api/v1/recipes', data)
     }
-    return apiClient.post('/api/v1/recipes', data)
+    invalidateQuery('guns')
+    return result
   }
 
-  /**
-   * Update existing product.
-   */
+  /** Update produk. */
   async updateGun(id, data) {
+    let result
     if (IS_SUPABASE) {
       const specsArray = Array.isArray(data.ingredients)
         ? data.ingredients.map((i) => `${i.name}: ${i.quantity}`)
@@ -163,9 +176,7 @@ class GunService {
         ? data.specs
         : undefined
 
-      const payload = {
-        updated_at: new Date().toISOString(),
-      }
+      const payload = { updated_at: new Date().toISOString() }
       if (data.name !== undefined) payload.name = data.name
       if (data.type !== undefined) payload.type = data.type
       if (data.caliber !== undefined) payload.caliber = data.caliber
@@ -175,36 +186,39 @@ class GunService {
       if (data.description !== undefined) payload.description = data.description
       if (specsArray !== undefined) payload.specs = specsArray
       if (data.image_url !== undefined) payload.image_url = data.image_url
+      if (data.deleted_at !== undefined) payload.deleted_at = data.deleted_at
 
       const res = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, payload, {
-        headers: { Prefer: 'return=representation' },
+        headers: { 'Prefer': 'return=representation' },
       })
       const updated = Array.isArray(res) ? res[0] : res
-      return { success: true, data: normalizeProduct(updated) }
+      result = { success: true, data: normalizeProduct(updated) }
+    } else {
+      result = await apiClient.patch(`/api/v1/recipes/${id}`, data)
     }
-    return apiClient.put(`/api/v1/recipes/${id}`, data)
+    invalidateQuery('guns')
+    invalidateQuery(`guns:item:${id}`)
+    return result
   }
 
-  /**
-   * Partial update (PATCH).
-   */
-  async patchGun(id, data) {
-    if (IS_SUPABASE) {
-      return this.updateGun(id, data)
-    }
-    return apiClient.patch(`/api/v1/recipes/${id}`, data)
-  }
-
-  /**
-   * Delete product.
-   */
+  /** Hapus / Soft delete produk. */
   async deleteGun(id) {
+    let result
     if (IS_SUPABASE) {
-      await apiClient.delete(`/rest/v1/products?id=eq.${id}`)
-      return { success: true }
+      const payload = { deleted_at: new Date().toISOString() }
+      const res = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, payload, {
+        headers: { 'Prefer': 'return=representation' },
+      })
+      const deleted = Array.isArray(res) ? res[0] : res
+      result = { success: true, data: normalizeProduct(deleted) }
+    } else {
+      result = await apiClient.delete(`/api/v1/recipes/${id}`)
     }
-    return apiClient.delete(`/api/v1/recipes/${id}`)
+    invalidateQuery('guns')
+    invalidateQuery(`guns:item:${id}`)
+    return result
   }
 }
 
-export default new GunService()
+export const gunService = new GunService()
+export default gunService

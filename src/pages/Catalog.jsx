@@ -6,6 +6,7 @@ import GunCard from '../components/gun/GunCard'
 import GunDetail from '../components/gun/GunDetail'
 import AdvancedFilter from '../components/common/AdvancedFilter'
 import ConfirmModal from '../components/modals/ConfirmModal'
+import Pagination from '../components/common/Pagination' // BARU
 import gunService from '../services/gunService'
 import {
   matchesSearch,
@@ -21,11 +22,15 @@ import {
  *   1. Live API via useGuns()
  *   2. Local static array (GUNS_LOCAL) when the API is unreachable
  *
- * Features: search, category filter, sort, CRUD actions, detail modal.
+ * Features: search, category filter, sort, pagination, CRUD actions, detail modal.
  */
+
+const PAGE_SIZE = 8 // BARU: jumlah katalog per halaman
+
 export default function Catalog({ onNavigate }) {
   // ---- API data ----
-  const { guns: apiGuns, loading, error, refetch } = useGuns({ limit: 50 })
+  // DIUBAH: limit 50 -> 200 supaya data di atas 50 tetap ikut terambil
+  const { guns: apiGuns, loading, error, refetch } = useGuns({ limit: 200 })
   const [useLocal, setUseLocal] = useState(false)
 
   // Decide data source
@@ -51,6 +56,19 @@ export default function Catalog({ onNavigate }) {
     )
     return sortItems(result, sortKey, sortOrder)
   }, [rawGuns, search, activeCategory, sortKey, sortOrder])
+
+  // ---- BARU: pagination ----
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(filteredGuns.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages) // pengaman jika hasil filter menyusut
+  const pagedGuns = filteredGuns.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  )
+  const goToPage = (p) => {
+    setPage(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   // ---- detail view ----
   const [selectedGun, setSelectedGun] = useState(null)
@@ -117,16 +135,20 @@ export default function Catalog({ onNavigate }) {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters — DIUBAH: setiap perubahan filter kembali ke halaman 1 */}
         <AdvancedFilter
           search={search}
-          onSearch={setSearch}
+          onSearch={(v) => { setSearch(v); setPage(1) }}
           categories={categories}
           activeCategory={activeCategory}
-          onCategory={setActiveCategory}
+          onCategory={(v) => { setActiveCategory(v); setPage(1) }}
           sortKey={sortKey}
           sortOrder={sortOrder}
-          onSort={({ key, order }) => { setSortKey(key); setSortOrder(order) }}
+          onSort={({ key, order }) => {
+            setSortKey(key)
+            setSortOrder(order)
+            setPage(1)
+          }}
         />
 
         {/* States */}
@@ -163,10 +185,10 @@ export default function Catalog({ onNavigate }) {
           </div>
         )}
 
-        {/* Product grid */}
+        {/* Product grid — DIUBAH: render pagedGuns, bukan filteredGuns */}
         {filteredGuns.length > 0 && (
           <ul className="stock">
-            {filteredGuns.map((gun) => (
+            {pagedGuns.map((gun) => (
               <GunCard
                 key={gun.id || gun.name}
                 gun={gun}
@@ -177,6 +199,13 @@ export default function Catalog({ onNavigate }) {
             ))}
           </ul>
         )}
+
+        {/* BARU: kontrol halaman */}
+        <Pagination
+          page={currentPage}
+          totalPages={totalPages}
+          onPage={goToPage}
+        />
 
         {useLocal && (
           <p className="local-notice">

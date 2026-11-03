@@ -3,7 +3,7 @@ import { ArrowLeft, Star, Send, Loader } from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
 import { useReviews, useCreateReview } from '../../hooks/useReviews'
 import { getUserIdentifier } from '../../services/userService'
-import { formatPrice, averageRating } from '../../utils/helpers'
+import { formatPrice, averageRating, resolveGunImage, handleImgError } from '../../utils/helpers'
 
 /**
  * Full-screen product detail view.
@@ -15,7 +15,7 @@ import { formatPrice, averageRating } from '../../utils/helpers'
  * @param {Function} [props.onDelete]— trigger delete flow
  */
 export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
-  const imgSrc = gun.image_url || gun.image || '/guns/pistol.svg'
+  const imgSrc = resolveGunImage(gun)
   const category = gun.type || gun.category || '—'
   const caliber = gun.caliber || gun.difficulty || ''
   const price = gun.price ?? gun.cook_time ?? 0
@@ -66,7 +66,12 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
 
       {/* Hero */}
       <div className="detail-hero">
-        <img className="detail-img" src={imgSrc} alt={gun.name} />
+        <img
+          className="detail-img"
+          src={imgSrc}
+          alt={gun.name}
+          onError={(e) => handleImgError(e, gun)}
+        />
         <div className="detail-info">
           <h1 className="display">{gun.name}</h1>
           <p className="type">
