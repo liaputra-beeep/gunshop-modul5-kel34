@@ -28,3 +28,4 @@ dist-ssr
 dist
 dev-dist
 node_modules
+echo dev-dist
