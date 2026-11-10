@@ -87,7 +87,7 @@ export default function Catalog({ onNavigate }) {
       setDeleteTarget(null)
       refetch()
     } catch (err) {
-      setDeleteError(err.message || 'Failed to delete.')
+      setDeleteError(err.message || 'Gagal mengarsipkan.')
     } finally {
       setDeleting(false)
     }
@@ -224,10 +224,9 @@ export default function Catalog({ onNavigate }) {
       {/* Delete confirmation */}
       <ConfirmModal
         open={!!deleteTarget}
-        title="Delete Product"
-        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        danger
+        title="Archive Product"
+        message={`Pindahkan "${deleteTarget?.name}" ke arsip? Kamu bisa memulihkannya nanti dari Profile, bagian Archive.`}
+        confirmLabel="Archive"
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => { setDeleteTarget(null); setDeleteError('') }}

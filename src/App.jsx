@@ -150,6 +150,7 @@ function App() {
               <ProfilePage
                 onReplaySplash={() => setShowSplash(true)}
                 onEditProfile={() => handleNavigate('EditProfile')}
+                onNavigateCreate={() => handleNavigate('Create')}
                 onSelectGun={(g) => handleNavigate('Detail', g)}
               />
             )}
@@ -160,10 +161,9 @@ function App() {
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title="Delete Hardware Record"
-        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        danger
+        title="Archive Hardware"
+        message={`Pindahkan "${deleteTarget?.name}" ke arsip? Kamu bisa memulihkannya nanti dari Profile, bagian Archive.`}
+        confirmLabel="Archive"
         loading={deleting}
         onConfirm={async () => {
           if (!deleteTarget) return
@@ -174,7 +174,7 @@ function App() {
             handleBackToList()
             setTab('Catalog')
           } catch (err) {
-            alert(err.message || 'Failed to delete record.')
+            alert(err.message || 'Gagal mengarsipkan.')
           } finally {
             setDeleting(false)
           }

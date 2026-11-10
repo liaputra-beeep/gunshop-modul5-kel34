@@ -40,6 +40,8 @@ class UploadService {
         await axios.post(uploadUrl, file, {
           headers: {
             'Content-Type': file.type,
+            // nama file unik -> aman di-cache 1 tahun (muncul "disk cache" saat reload)
+            'cache-control': 'max-age=31536000',
             apikey: SUPABASE_KEY,
             Authorization: `Bearer ${SUPABASE_KEY}`,
           },

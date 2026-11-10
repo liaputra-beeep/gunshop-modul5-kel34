@@ -1,38 +1,33 @@
+// src/pages/ProfilePage.jsx
 import { useState } from 'react'
 import { Shield, Copy, Check, Heart, FileText, Play, Pencil, Trash2 } from 'lucide-react'
 import userService from '../services/userService'
 import { useFavorites } from '../hooks/useFavorites'
+import {
+  getAllDraftIds,
+  loadDraft,
+  deleteDraft,
+  getDraftTimestamp,
+  formatDraftTime,
+} from '../utils/draftStorage'
+import ArchiveSection from '../components/gun/ArchiveSection'
 import About from './About.jsx'
 import Contact from './Contact.jsx'
 
-const DRAFT_PREFIXES = ['bore_barrel_draft_', 'recipe_draft_']
-
-/** Ambil semua draft dari localStorage */
-const loadDrafts = () => {
-  const drafts = []
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (!key || !DRAFT_PREFIXES.some((p) => key.startsWith(p))) continue
-      let data = {}
-      try {
-        data = JSON.parse(localStorage.getItem(key)) || {}
-      } catch {
-        /* isi bukan JSON, abaikan */
-      }
-      // sesuaikan field ini dengan bentuk draft di draftStorage.js
-      const src = data.form || data.values || data
-      drafts.push({
-        key,
-        name: src.name || 'Untitled draft',
-        type: src.type || '',
-      })
+/** Ambil semua draft katalog dari draftStorage. */
+const loadDrafts = () =>
+  getAllDraftIds().map((id) => {
+    const d = loadDraft(id) || {}
+    const form = d.formData || {}
+    return {
+      id,
+      isCreate: id === 'create',
+      name: form.name || 'Untitled draft',
+      type: form.type || '',
+      caliber: form.caliber || '',
+      savedAt: getDraftTimestamp(id),
     }
-  } catch {
-    /* localStorage tidak tersedia */
-  }
-  return drafts
-}
+  })
 
 export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateCreate }) {
   const [profile] = useState(() => userService.getUserProfile())
@@ -47,8 +42,9 @@ export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateC
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const removeDraft = (key) => {
-    localStorage.removeItem(key)
+  const removeDraft = (d) => {
+    if (!window.confirm(`Hapus draft "${d.name}"?`)) return
+    deleteDraft(d.id)
     setDrafts(loadDrafts())
   }
 
@@ -123,17 +119,20 @@ export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateC
         ) : (
           <ul className="cart-list">
             {drafts.map((d) => (
-              <li key={d.key} className="cart-item">
+              <li key={d.id} className="cart-item">
                 <div className="cart-info">
                   <span className="name display">{d.name}</span>
-                  {d.type && <span className="type">{d.type}</span>}
+                  <span className="type">
+                    {[d.type, d.caliber].filter(Boolean).join(' · ') || (d.isCreate ? 'Katalog baru' : 'Edit katalog')}
+                    {d.savedAt ? ` · disimpan ${formatDraftTime(d.savedAt)}` : ''}
+                  </span>
                 </div>
-                {onNavigateCreate && (
-                  <button className="btn btn--outline btn--sm" onClick={onNavigateCreate}>
+                {d.isCreate && onNavigateCreate && (
+                  <button type="button" className="btn btn--outline btn--sm" onClick={onNavigateCreate}>
                     Lanjutkan
                   </button>
                 )}
-                <button className="remove-btn" onClick={() => removeDraft(d.key)} title="Hapus draft">
+                <button type="button" className="remove-btn" onClick={() => removeDraft(d)} title="Hapus draft" aria-label="Hapus draft">
                   <Trash2 size={14} />
                 </button>
               </li>
@@ -141,6 +140,9 @@ export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateC
           </ul>
         )}
       </section>
+
+      {/* Archive */}
+      <ArchiveSection />
 
       {/* About */}
       <section className="profile-section" id="about">

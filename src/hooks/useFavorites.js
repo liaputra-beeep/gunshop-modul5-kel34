@@ -1,144 +1,126 @@
-import { useState, useEffect, useCallback } from 'react'
+// src/hooks/useFavorites.js
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import favoriteService from '../services/favoriteService'
 import { getUserIdentifier } from '../services/userService'
 
 // ---------------------------------------------------------------------------
-// localStorage fallback — used when the backend is unavailable so that
-// favourites are still fully functional offline.
+// Favorit disimpan di localStorage dan dibagikan ke semua komponen
+// (tombol love di kartu, Header, Profile, halaman Favorites) lewat store
+// sederhana, jadi semuanya langsung ikut berubah saat satu tombol diklik.
+// Sinkronisasi ke server (Supabase) dilakukan di belakang layar dan hanya
+// "best effort": kalau gagal, favorit tetap tersimpan lokal.
 // ---------------------------------------------------------------------------
 
 const LOCAL_KEY = 'bore_barrel_favorites'
+const listeners = new Set()
 
-const readLocalFavs = () => {
+const readLocal = () => {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY)
-    return raw ? JSON.parse(raw) : []
+    const raw = JSON.parse(localStorage.getItem(LOCAL_KEY))
+    return Array.isArray(raw) ? [...new Set(raw.map(String))] : []
   } catch {
     return []
   }
 }
 
-const writeLocalFavs = (ids) => {
+let snapshot = readLocal()
+
+const write = (ids) => {
+  snapshot = ids
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(ids))
   } catch {
-    /* quota exceeded — silently fail */
+    /* quota penuh: abaikan */
+  }
+  listeners.forEach((l) => l())
+}
+
+const subscribe = (cb) => {
+  listeners.add(cb)
+  return () => listeners.delete(cb)
+}
+const getSnapshot = () => snapshot
+
+// Hanya id berbentuk UUID atau angka yang bisa disimpan di tabel server.
+const isServerId = (id) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ||
+  /^\d+$/.test(id)
+
+// ---- sinkronisasi dari server (sekali per sesi) ----
+let synced = false
+const syncFromServer = async () => {
+  try {
+    const res = await favoriteService.getFavorites(getUserIdentifier())
+    if (!res?.success || !Array.isArray(res.data)) return
+    const remote = res.data
+      .map((f) => String(f.product_id ?? f.recipe_id ?? f.id ?? ''))
+      .filter(Boolean)
+    const merged = [...new Set([...snapshot, ...remote])]
+    if (merged.length !== snapshot.length) write(merged)
+  } catch {
+    /* server tidak tersedia: pakai data lokal */
   }
 }
 
-// ---------------------------------------------------------------------------
-// useFavorites — list all favourited product IDs.
-//
-// First attempts the server; on failure uses localStorage.
-// ---------------------------------------------------------------------------
+export const toggleFavoriteId = (gunId) => {
+  const id = String(gunId)
+  const has = snapshot.includes(id)
+  const next = has ? snapshot.filter((x) => x !== id) : [...snapshot, id]
+  write(next) // UI langsung berubah
 
+  if (isServerId(id)) {
+    favoriteService
+      .setFavorite(id, getUserIdentifier(), !has)
+      .catch(() => {}) // gagal sinkron tidak masalah
+  }
+  return { is_favorited: !has }
+}
+
+// ---------------------------------------------------------------------------
+// useFavorites — daftar favorit (array objek { id }).
+// ---------------------------------------------------------------------------
 export function useFavorites() {
-  const [favorites, setFavorites] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [isLocal, setIsLocal] = useState(false)
-  const userIdentifier = getUserIdentifier()
-
-  const fetchFavorites = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const response = await favoriteService.getFavorites(userIdentifier)
-
-      if (response.success) {
-        setFavorites(response.data || [])
-        setIsLocal(false)
-      } else {
-        throw new Error(response.message)
-      }
-    } catch {
-      // Fallback to localStorage
-      setFavorites(readLocalFavs())
-      setIsLocal(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [userIdentifier])
+  const ids = useSyncExternalStore(subscribe, getSnapshot)
 
   useEffect(() => {
-    fetchFavorites()
-  }, [fetchFavorites])
+    if (synced) return
+    synced = true
+    syncFromServer()
+  }, [])
 
-  return { favorites, loading, error, isLocal, refetch: fetchFavorites }
+  const favorites = useMemo(() => ids.map((id) => ({ id })), [ids])
+  const refetch = useCallback(() => syncFromServer(), [])
+
+  return { favorites, loading: false, error: null, isLocal: true, refetch }
 }
 
 // ---------------------------------------------------------------------------
-// useToggleFavorite — toggle a product in/out of favourites.
+// useToggleFavorite — dipertahankan agar import lama tetap jalan.
 // ---------------------------------------------------------------------------
-
 export function useToggleFavorite() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const userIdentifier = getUserIdentifier()
-
-  const toggleFavorite = async (gunId) => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const response = await favoriteService.toggleFavorite({
-        recipe_id: gunId,
-        user_identifier: userIdentifier,
-      })
-
-      if (response.success) {
-        return response.data
-      }
-      throw new Error(response.message)
-    } catch {
-      // Fallback: toggle in localStorage
-      const current = readLocalFavs()
-      const idx = current.findIndex((id) => String(id) === String(gunId))
-      let isFavorited
-
-      if (idx === -1) {
-        current.push(gunId)
-        isFavorited = true
-      } else {
-        current.splice(idx, 1)
-        isFavorited = false
-      }
-      writeLocalFavs(current)
-      return { is_favorited: isFavorited }
-    } finally {
-      setLoading(false)
-    }
+  return {
+    toggleFavorite: async (gunId) => toggleFavoriteId(gunId),
+    loading: false,
+    error: null,
   }
-
-  return { toggleFavorite, loading, error }
 }
 
 // ---------------------------------------------------------------------------
-// useIsFavorited — convenience wrapper for a single product.
+// useIsFavorited — untuk satu produk (dipakai tombol love).
 // ---------------------------------------------------------------------------
-
 export function useIsFavorited(gunId) {
-  const { favorites, loading: fetchLoading, refetch } = useFavorites()
-  const { toggleFavorite: toggle, loading: toggleLoading } = useToggleFavorite()
+  const ids = useSyncExternalStore(subscribe, getSnapshot)
 
-  // Check both server-format (objects with .id) and local-format (plain ids)
-  const isFavorited = favorites.some((fav) => {
-    const favId = typeof fav === 'object' && fav !== null ? (fav.id ?? fav.product_id ?? fav.recipe_id) : fav
-    return String(favId) === String(gunId)
-  })
+  useEffect(() => {
+    if (synced) return
+    synced = true
+    syncFromServer()
+  }, [])
 
-  const toggleFavorite = async () => {
-    const result = await toggle(gunId)
-    if (result) await refetch()
-    return result
-  }
+  const isFavorited = ids.includes(String(gunId))
+  const toggleFavorite = async () => toggleFavoriteId(gunId)
 
-  return {
-    isFavorited,
-    loading: fetchLoading || toggleLoading,
-    toggleFavorite,
-  }
+  return { isFavorited, loading: false, toggleFavorite }
 }
 
 export { getUserIdentifier }

@@ -25,8 +25,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // Gambar katalog sengaja tidak di-precache: dilayani lewat HTTP cache
+        // (header Cache-Control di vercel.json) sehingga muncul "disk cache" di Network.
+        globIgnores: ['guns/**', 'about/**'],
       },
     }),
   ],
 })
-

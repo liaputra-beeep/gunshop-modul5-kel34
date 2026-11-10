@@ -57,6 +57,17 @@ export const normalizeProduct = (item) => {
 // ---------------------------------------------------------------------------
 // GunService
 // ---------------------------------------------------------------------------
+// Supabase + RLS: kalau tidak ada policy UPDATE/DELETE, request tetap "sukses"
+// (HTTP 200) tapi 0 baris yang berubah. Helper ini mengubahnya jadi error jelas.
+const RLS_HINT =
+  'Tidak ada data yang berubah. Kemungkinan RLS policy UPDATE/DELETE di Supabase belum diizinkan untuk tabel products.'
+
+const assertAffected = (res) => {
+  if (Array.isArray(res) && res.length === 0) throw new Error(RLS_HINT)
+  if (!res) throw new Error(RLS_HINT)
+  return Array.isArray(res) ? res[0] : res
+}
+
 class GunService {
   /**
    * Ambil daftar produk (di-cache 60 detik).
@@ -201,7 +212,7 @@ class GunService {
     return result
   }
 
-  /** Hapus / Soft delete produk. */
+  /** Arsipkan produk (soft delete: hanya mengisi deleted_at). */
   async deleteGun(id) {
     let result
     if (IS_SUPABASE) {
@@ -209,8 +220,44 @@ class GunService {
       const res = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, payload, {
         headers: { 'Prefer': 'return=representation' },
       })
-      const deleted = Array.isArray(res) ? res[0] : res
+      const deleted = assertAffected(res)
       result = { success: true, data: normalizeProduct(deleted) }
+    } else {
+      result = await apiClient.delete(`/api/v1/recipes/${id}`)
+    }
+    invalidateQuery('guns')
+    invalidateQuery(`guns:item:${id}`)
+    return result
+  }
+
+  /** Pulihkan produk dari arsip. */
+  async restoreGun(id) {
+    let result
+    if (IS_SUPABASE) {
+      const res = await apiClient.patch(
+        `/rest/v1/products?id=eq.${id}`,
+        { deleted_at: null },
+        { headers: { Prefer: 'return=representation' } },
+      )
+      const restored = assertAffected(res)
+      result = { success: true, data: normalizeProduct(restored) }
+    } else {
+      result = await apiClient.patch(`/api/v1/recipes/${id}`, { deleted_at: null })
+    }
+    invalidateQuery('guns')
+    invalidateQuery(`guns:item:${id}`)
+    return result
+  }
+
+  /** Hapus permanen dari database (tidak bisa dipulihkan). */
+  async deleteGunPermanent(id) {
+    let result
+    if (IS_SUPABASE) {
+      const res = await apiClient.delete(`/rest/v1/products?id=eq.${id}`, {
+        headers: { Prefer: 'return=representation' },
+      })
+      assertAffected(res)
+      result = { success: true }
     } else {
       result = await apiClient.delete(`/api/v1/recipes/${id}`)
     }

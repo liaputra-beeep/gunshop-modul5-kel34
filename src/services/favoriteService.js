@@ -41,37 +41,53 @@ class FavoriteService {
   }
 
   /**
-   * Toggle a product's favourite state (add ↔ remove).
-   * @param {Object} data  { recipe_id, user_identifier }
+   * Set a product's favourite state explicitly (add or remove).
+   * Dipakai oleh useFavorites untuk sinkronisasi ke server.
+   * Product id bisa UUID (string) atau angka.
    */
-  async toggleFavorite(data) {
-    if (IS_SUPABASE) {
-      const targetId = Number(data.recipe_id || data.gun_id)
-      const userId = data.user_identifier
+  async setFavorite(productId, userId, shouldFavorite) {
+    const pid = encodeURIComponent(String(productId))
+    const uid = encodeURIComponent(String(userId))
 
-      // Check if already favorited
-      const existing = await apiClient.get(
-        `/rest/v1/favorites?product_id=eq.${targetId}&user_id=eq.${userId}&select=*`,
-      )
-
-      if (Array.isArray(existing) && existing.length > 0) {
-        // Remove from favorites
-        await apiClient.delete(
-          `/rest/v1/favorites?product_id=eq.${targetId}&user_id=eq.${userId}`,
-        )
-        return { success: true, data: { is_favorited: false } }
-      } else {
-        // Add to favorites
-        await apiClient.post(
-          '/rest/v1/favorites',
-          { product_id: targetId, user_id: userId },
-          { headers: { Prefer: 'return=minimal' } },
-        )
-        return { success: true, data: { is_favorited: true } }
-      }
+    if (!IS_SUPABASE) {
+      return apiClient.post('/api/v1/favorites/toggle', {
+        recipe_id: productId,
+        user_identifier: userId,
+      })
     }
 
-    return apiClient.post('/api/v1/favorites/toggle', data)
+    const existing = await apiClient.get(
+      `/rest/v1/favorites?product_id=eq.${pid}&user_id=eq.${uid}&select=product_id`,
+    )
+    const exists = Array.isArray(existing) && existing.length > 0
+
+    if (shouldFavorite && !exists) {
+      await apiClient.post(
+        '/rest/v1/favorites',
+        { product_id: productId, user_id: userId },
+        { headers: { Prefer: 'return=minimal' } },
+      )
+    } else if (!shouldFavorite && exists) {
+      await apiClient.delete(`/rest/v1/favorites?product_id=eq.${pid}&user_id=eq.${uid}`)
+    }
+    return { success: true, data: { is_favorited: shouldFavorite } }
+  }
+
+  /**
+   * Toggle (tetap ada untuk kompatibilitas).
+   */
+  async toggleFavorite(data) {
+    const productId = data.recipe_id || data.gun_id
+    if (!IS_SUPABASE) return apiClient.post('/api/v1/favorites/toggle', data)
+
+    const pid = encodeURIComponent(String(productId))
+    const uid = encodeURIComponent(String(data.user_identifier))
+    const existing = await apiClient.get(
+      `/rest/v1/favorites?product_id=eq.${pid}&user_id=eq.${uid}&select=product_id`,
+    )
+    const exists = Array.isArray(existing) && existing.length > 0
+    await this.setFavorite(productId, data.user_identifier, !exists)
+    return { success: true, data: { is_favorited: !exists } }
   }
 }
 

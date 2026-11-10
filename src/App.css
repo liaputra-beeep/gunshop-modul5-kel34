@@ -1910,3 +1910,21 @@
 /* Fade-in saat gambar selesai dimuat */
 .lazy-img { opacity: 0; transition: opacity 0.3s ease; }
 .lazy-img.is-loaded { opacity: 1; }
+
+/* Tempel di AKHIR App.css */
+
+/* Section About / Contact / Draft di halaman Profile */
+.profile-section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 24px;
+}
+.profile-section .section-title {
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+/* About & Contact punya pembungkus .page sendiri; rapatkan di dalam section */
+.profile-section .page { padding: 0; }
+.profile-section .page h1 { font-size: 1.5rem; margin: 0 0 12px; }
