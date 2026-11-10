@@ -2,6 +2,7 @@
 import { ShoppingCart } from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
 import ShareButton from '../common/ShareButton'
+import LazyImage from '../common/LazyImage'
 import { formatPrice, truncate, resolveGunImage, handleImgError } from '../../utils/helpers'
 import useCart from '../../hooks/useCart'
 import { checkoutWhatsApp } from '../../utils/checkout'
@@ -32,14 +33,12 @@ export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
         onClick={() => onSelect(gun)}
         aria-label={`View ${gun.name}`}
       >
-        <img
+        <LazyImage
           className="card-img"
+          wrapClassName="card-img-wrap"
           src={imgSrc}
-          onError={(e) => handleImgError(e, gun)}
           alt={gun.name}
-          width="240"
-          height="180"
-          loading="lazy"
+          onError={(e) => handleImgError(e, gun)}
         />
         <span className="name display">{gun.name}</span>
         <span className="type">

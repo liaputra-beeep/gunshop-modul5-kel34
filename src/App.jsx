@@ -1,14 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import Header from './components/Header.jsx'
 import Footer from './components/Footer.jsx'
 import Catalog from './pages/Catalog.jsx'
-import FavoritesPage from './pages/FavoritesPage.jsx'
-import ProfilePage from './pages/ProfilePage.jsx'
-import EditProfilePage from './pages/EditProfilePage.jsx'
-import Cart from './pages/Cart.jsx'
-import CreateGunPage from './pages/CreateGunPage.jsx'
-import EditGunPage from './pages/EditGunPage.jsx'
-import GunDetail from './components/gun/GunDetail.jsx'
 import PWABadge from './components/PWABadge.jsx'
 import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import SplashScreen from './components/common/SplashScreen.jsx'
@@ -16,6 +9,15 @@ import gunService from './services/gunService.js'
 import { getSharedId, setUrlGun } from './utils/shareLink.js'
 import useCart from './hooks/useCart.js'
 import './App.css'
+
+// Lazy load: halaman dimuat hanya saat dibuka (Catalog tetap langsung karena halaman pertama)
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage.jsx'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
+const EditProfilePage = lazy(() => import('./pages/EditProfilePage.jsx'))
+const Cart = lazy(() => import('./pages/Cart.jsx'))
+const CreateGunPage = lazy(() => import('./pages/CreateGunPage.jsx'))
+const EditGunPage = lazy(() => import('./pages/EditGunPage.jsx'))
+const GunDetail = lazy(() => import('./components/gun/GunDetail.jsx'))
 
 function App() {
   const [showSplash, setShowSplash] = useState(true)
@@ -86,6 +88,7 @@ function App() {
       />
 
       <main className="main">
+        <Suspense fallback={<div className="state-box"><p>Memuat…</p></div>}>
         {mode === 'create' && (
           <CreateGunPage
             onBack={handleBackToList}
@@ -152,6 +155,7 @@ function App() {
             )}
           </>
         )}
+        </Suspense>
       </main>
 
       <ConfirmModal
