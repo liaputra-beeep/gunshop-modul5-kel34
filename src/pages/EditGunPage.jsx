@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import gunService from '../services/gunService'
 import uploadService from '../services/uploadService'
+import MultiImageUploader from '../components/common/MultiImageUploader'
 import {
   saveDraft,
   loadDraft,
@@ -46,6 +47,7 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
   })
 
   const [currentImageUrl, setCurrentImageUrl] = useState('')
+  const [extraImages, setExtraImages] = useState([]) // galeri tambahan
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -89,6 +91,7 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
             is_featured: Boolean(data.is_featured),
           })
           setCurrentImageUrl(data.image_url || data.image || '/guns/pistol.svg')
+          setExtraImages(Array.isArray(data.images) ? data.images.slice(1) : [])
 
           if (data.ingredients && data.ingredients.length > 0) {
             setSpecs(data.ingredients.map((ing) => ({
@@ -131,6 +134,7 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
       if (draft.formData) setFormData(draft.formData)
       if (draft.specs) setSpecs(draft.specs)
       if (draft.steps) setSteps(draft.steps)
+      if (Array.isArray(draft.extraImages)) setExtraImages(draft.extraImages)
       if (draft.imagePreview) {
         setImagePreview(draft.imagePreview)
       }
@@ -152,6 +156,8 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
       specs,
       steps,
       imagePreview: imagePreview || currentImageUrl,
+      // data: URL terlalu besar untuk localStorage, jadi tidak ikut draft
+      extraImages: extraImages.filter((u) => !u.startsWith('data:')),
     }
     const saved = saveDraft(draftData, targetId)
     if (saved) {
@@ -273,6 +279,7 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
       category: formData.category || 'makanan',
       description: formData.description.trim() || `${formData.type} caliber ${formData.caliber}.`,
       image_url: imagePreview || currentImageUrl || '/guns/pistol.svg',
+      images: [imagePreview || currentImageUrl || '/guns/pistol.svg', ...extraImages],
       prep_time: 15,
       cook_time: Number(formData.price) || 500,
       servings: Number(formData.servings) || 1,
@@ -387,6 +394,9 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
             </div>
           </div>
         </div>
+
+        {/* Galeri: lebih dari satu gambar per katalog */}
+        <MultiImageUploader images={extraImages} onChange={setExtraImages} />
 
         {/* Core fields */}
         <div className="form-grid">

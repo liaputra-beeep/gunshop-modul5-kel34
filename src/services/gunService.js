@@ -37,6 +37,12 @@ export const normalizeProduct = (item) => {
           'Inspect receiver and mechanism for maintenance.',
         ]
 
+  // Galeri: images[0] selalu sampul, sisanya gambar tambahan
+  const cover = resolveGunImage(item)
+  const extraImages = (Array.isArray(item.images) ? item.images : []).filter(
+    (u) => typeof u === 'string' && u && u !== cover && u !== item.image_url,
+  )
+
   return {
     ...item,
     id: item.id,
@@ -46,8 +52,9 @@ export const normalizeProduct = (item) => {
     caliber: item.caliber || 'Standard',
     price: Number(item.price ?? item.cook_time ?? 0),
     description: item.description || '',
-    image_url: resolveGunImage(item),
-    image: resolveGunImage(item),
+    image_url: cover,
+    image: cover,
+    images: [cover, ...extraImages],
     ingredients: specsList,
     steps: stepsList,
     deleted_at: item.deleted_at ?? null,
@@ -163,6 +170,7 @@ class GunService {
         description: data.description || '',
         specs: specsArray,
         image_url: data.image_url || null,
+        images: Array.isArray(data.images) ? data.images : [],
       }
 
       const res = await apiClient.post('/rest/v1/products', payload, {
@@ -197,6 +205,7 @@ class GunService {
       if (data.description !== undefined) payload.description = data.description
       if (specsArray !== undefined) payload.specs = specsArray
       if (data.image_url !== undefined) payload.image_url = data.image_url
+      if (Array.isArray(data.images)) payload.images = data.images
       if (data.deleted_at !== undefined) payload.deleted_at = data.deleted_at
 
       const res = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, payload, {

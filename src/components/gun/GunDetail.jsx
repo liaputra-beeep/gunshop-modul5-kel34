@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Star, Send, Loader, Minus, Plus, ShoppingCart, Link2, Check, MessageCircle } from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
+import ReviewList from './ReviewList'
 import { useReviews, useCreateReview } from '../../hooks/useReviews'
 import { getUserIdentifier } from '../../services/userService'
 import useCart from '../../hooks/useCart'
@@ -21,6 +22,11 @@ const MAX_QTY = 10 // batas pembelian per produk
  */
 export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
   const imgSrc = resolveGunImage(gun)
+
+  // Galeri: gun.images[0] adalah sampul
+  const gallery = Array.isArray(gun.images) && gun.images.length > 0 ? gun.images : [imgSrc]
+  const [activeIdx, setActiveIdx] = useState(0)
+  const mainSrc = gallery[Math.min(activeIdx, gallery.length - 1)]
   const category = gun.type || gun.category || '—'
   const caliber = gun.caliber || gun.difficulty || ''
   const price = gun.price ?? gun.cook_time ?? 0
@@ -123,10 +129,27 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
         <div className="detail-media">
           <img
             className="detail-img"
-            src={imgSrc}
+            src={mainSrc}
             alt={gun.name}
             onError={(e) => handleImgError(e, gun)}
           />
+
+          {gallery.length > 1 && (
+            <div className="detail-thumbs" role="list">
+              {gallery.map((src, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="listitem"
+                  className={`detail-thumb${i === activeIdx ? ' is-active' : ''}`}
+                  onClick={() => setActiveIdx(i)}
+                  aria-label={`Gambar ${i + 1} dari ${gallery.length}`}
+                >
+                  <img src={src} alt="" loading="lazy" onError={(e) => handleImgError(e, gun)} />
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="share-row">
             <span className="share-label">Share:</span>
@@ -307,26 +330,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
         {reviewsLoading ? (
           <p className="detail-loading">Loading reviews…</p>
         ) : reviews.length > 0 ? (
-          <ul className="review-list">
-            {reviews.map((rev) => (
-              <li key={rev.id} className="review-item">
-                <div className="review-head">
-                  <span className="review-user">{rev.user_identifier || 'Anonymous'}</span>
-                  <span className="review-stars-display">
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <Star
-                        key={i}
-                        size={14}
-                        fill={i < rev.rating ? 'var(--brass)' : 'none'}
-                        stroke={i < rev.rating ? 'var(--brass)' : 'var(--line)'}
-                      />
-                    ))}
-                  </span>
-                </div>
-                {rev.comment && <p className="review-comment">{rev.comment}</p>}
-              </li>
-            ))}
-          </ul>
+          <ReviewList reviews={reviews} onChanged={refetchReviews} />
         ) : (
           <p className="detail-empty">No reviews yet. Be the first!</p>
         )}
