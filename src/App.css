@@ -2004,3 +2004,68 @@
 .detail-thumb.is-active {
   border-color: var(--brass);
 }
+
+/* Review actions: edit/hapus + like/dislike */
+.review-own-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--brass);
+  border: 1px solid var(--brass);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.review-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vote-btn,
+.vote-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--steel);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.vote-count {
+  border-color: transparent;
+  padding-left: 0;
+}
+
+.vote-btn {
+  cursor: pointer;
+}
+
+.vote-btn:hover {
+  border-color: var(--brass);
+}
+
+.vote-btn.is-active {
+  color: var(--brass);
+  border-color: var(--brass);
+  background: rgba(176, 141, 60, 0.1);
+}
+
+.vote-btn.is-active.is-down {
+  color: #c0392b;
+  border-color: #c0392b;
+  background: rgba(192, 57, 43, 0.08);
+}
