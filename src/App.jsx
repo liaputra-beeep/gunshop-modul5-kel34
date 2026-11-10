@@ -14,9 +14,8 @@ import ConfirmModal from './components/modals/ConfirmModal.jsx'
 import SplashScreen from './components/common/SplashScreen.jsx'
 import gunService from './services/gunService.js'
 import { getSharedId, setUrlGun } from './utils/shareLink.js'
+import useCart from './hooks/useCart.js'
 import './App.css'
-
-const CART_KEY = 'bb_cart'
 
 function App() {
   const [showSplash, setShowSplash] = useState(true)
@@ -28,40 +27,8 @@ function App() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  // ---- Cart (disimpan di localStorage supaya tidak hilang saat refresh)
-  const [cart, setCart] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(CART_KEY)) || []
-    } catch {
-      return []
-    }
-  })
-
-  useEffect(() => {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart))
-  }, [cart])
-
-  const addToCart = (gun) =>
-    setCart((prev) => {
-      const found = prev.find((i) => i.gun.name === gun.name)
-      return found
-        ? prev.map((i) =>
-            i.gun.name === gun.name ? { ...i, qty: i.qty + 1 } : i
-          )
-        : [...prev, { gun, qty: 1 }]
-    })
-
-  const changeQty = (name, delta) =>
-    setCart((prev) =>
-      prev
-        .map((i) => (i.gun.name === name ? { ...i, qty: i.qty + delta } : i))
-        .filter((i) => i.qty > 0)
-    )
-
-  const removeFromCart = (name) =>
-    setCart((prev) => prev.filter((i) => i.gun.name !== name))
-
-  const cartCount = cart.reduce((sum, i) => sum + i.qty, 0)
+  // ---- Cart (state bersama lewat hooks/useCart)
+  const { add: addToCart, count: cartCount } = useCart()
 
   // ---- Buka detail otomatis kalau URL berisi ?gun=<id> (share link)
   useEffect(() => {
@@ -70,7 +37,8 @@ function App() {
     // sesuaikan nama method dengan yang ada di gunService.js
     gunService
       .getGunById(id)
-      .then((g) => {
+      .then((res) => {
+        const g = res?.data ?? res
         setSelectedGun(g)
         setMode('detail')
       })
@@ -173,12 +141,7 @@ function App() {
               />
             )}
             {tab === 'Cart' && (
-              <Cart
-                cart={cart}
-                onChangeQty={changeQty}
-                onRemove={removeFromCart}
-                onBrowse={() => handleNavigate('Catalog')}
-              />
+              <Cart onBrowse={() => handleNavigate('Catalog')} />
             )}
             {tab === 'Profile' && (
               <ProfilePage

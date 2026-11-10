@@ -1,31 +1,18 @@
-import { resolveGunImage, handleImgError } from '../utils/helpers'
+// src/pages/Cart.jsx
+import { Trash2, Minus, Plus } from 'lucide-react'
+import useCart from '../hooks/useCart'
+import { checkoutWhatsApp } from '../utils/checkout'
+import { resolveGunImage, handleImgError, formatPrice } from '../utils/helpers'
 
-const WA_NUMBER = import.meta.env.VITE_WA_NUMBER
+export default function Cart({ onBrowse }) {
+  const { items, total, setQty, remove, clear } = useCart()
 
-function Cart({ cart, onChangeQty, onRemove, onBrowse }) {
-  const total = cart.reduce((sum, item) => sum + item.gun.price * item.qty, 0)
-
-  const handleCheckout = () => {
-    if (!WA_NUMBER) {
-      alert('Nomor WhatsApp belum diatur. Isi VITE_WA_NUMBER di file .env.')
-      return
-    }
-    const lines = cart.map(
-      ({ gun, qty }, i) =>
-        `${i + 1}. ${gun.name} x${qty} - $${(gun.price * qty).toLocaleString()}`
-    )
-    const text =
-      `Hi aku mau pesan:\n${lines.join('\n')}\n\n` +
-      `Total: $${total.toLocaleString()}`
-    window.location.href = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(text)}`
-  }
-
-  if (cart.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="page">
         <h1 className="display">Your cart is empty.</h1>
         <p className="lede">Add a piece from the catalog to get started.</p>
-        <button className="cart-browse" onClick={onBrowse}>
+        <button type="button" className="cart-browse" onClick={onBrowse}>
           Browse catalog
         </button>
       </div>
@@ -37,36 +24,38 @@ function Cart({ cart, onChangeQty, onRemove, onBrowse }) {
       <h1 className="display">Your cart.</h1>
 
       <ul className="cart-list">
-        {cart.map(({ gun, qty }) => (
-          <li key={gun.id ?? gun.name} className="cart-item">
+        {items.map((i) => (
+          <li key={i.id} className="cart-item">
             <img
-              src={resolveGunImage(gun)}
-              alt={gun.name}
+              src={resolveGunImage(i)}
+              alt={i.name}
               width="72"
               height="54"
               loading="lazy"
-              onError={(e) => handleImgError(e, gun)}
+              onError={(e) => handleImgError(e, i)}
             />
+
             <div className="cart-info">
-              <span className="name display">{gun.name}</span>
+              <span className="name display">{i.name}</span>
               <span className="type">
-                {gun.type} · ${gun.price.toLocaleString()}
+                {i.type} · {formatPrice(i.price)}
               </span>
             </div>
+
             <div className="qty">
-              <button onClick={() => onChangeQty(gun.name, -1)} aria-label="Decrease quantity">
-                −
+              <button type="button" onClick={() => setQty(i.id, i.qty - 1)} aria-label="Decrease quantity">
+                <Minus size={14} />
               </button>
-              <span>{qty}</span>
-              <button onClick={() => onChangeQty(gun.name, 1)} aria-label="Increase quantity">
-                +
+              <span>{i.qty}</span>
+              <button type="button" onClick={() => setQty(i.id, i.qty + 1)} aria-label="Increase quantity">
+                <Plus size={14} />
               </button>
             </div>
-            <span className="price cart-sub">
-              ${(gun.price * qty).toLocaleString()}
-            </span>
-            <button className="remove-btn" onClick={() => onRemove(gun.name)}>
-              Remove
+
+            <span className="price cart-sub">{formatPrice(i.price * i.qty)}</span>
+
+            <button type="button" className="remove-btn" onClick={() => remove(i.id)} aria-label="Remove">
+              <Trash2 size={16} />
             </button>
           </li>
         ))}
@@ -74,18 +63,21 @@ function Cart({ cart, onChangeQty, onRemove, onBrowse }) {
 
       <div className="cart-total">
         <span>Total</span>
-        <span className="price">${total.toLocaleString()}</span>
+        <span className="price">{formatPrice(total)}</span>
       </div>
 
-      <button
-        type="button"
-        className="btn btn--primary cart-checkout"
-        onClick={handleCheckout}
-      >
-        Check-out via WhatsApp
-      </button>
+      <div className="cart-actions">
+        <button type="button" className="btn-clear" onClick={clear}>
+          Kosongkan
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary cart-checkout"
+          onClick={() => checkoutWhatsApp(items)}
+        >
+          Check-out via WhatsApp
+        </button>
+      </div>
     </div>
   )
 }
-
-export default Cart

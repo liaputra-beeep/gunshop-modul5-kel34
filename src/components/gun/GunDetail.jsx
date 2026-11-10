@@ -1,9 +1,14 @@
 import { useState } from 'react'
-import { ArrowLeft, Star, Send, Loader } from 'lucide-react'
+import { ArrowLeft, Star, Send, Loader, Minus, Plus, ShoppingCart, Link2, Check, MessageCircle } from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
 import { useReviews, useCreateReview } from '../../hooks/useReviews'
 import { getUserIdentifier } from '../../services/userService'
+import useCart from '../../hooks/useCart'
+import { checkoutWhatsApp } from '../../utils/checkout'
+import { buildShareUrl } from '../../utils/shareLink'
 import { formatPrice, averageRating, resolveGunImage, handleImgError } from '../../utils/helpers'
+
+const MAX_QTY = 10 // batas pembelian per produk
 
 /**
  * Full-screen product detail view.
@@ -19,6 +24,55 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
   const category = gun.type || gun.category || '—'
   const caliber = gun.caliber || gun.difficulty || ''
   const price = gun.price ?? gun.cook_time ?? 0
+
+  // Keranjang & jumlah
+  const { add } = useCart()
+  const [qty, setQty] = useState(1)
+  const [added, setAdded] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const hasStock = gun.stock === undefined || gun.stock === null || Number(gun.stock) > 0
+  const maxQty = gun.stock ? Math.min(MAX_QTY, Number(gun.stock)) : MAX_QTY
+
+  const handleAddToCart = () => {
+    add(gun, qty)
+    setAdded(true)
+    setTimeout(() => setAdded(false), 1800)
+  }
+
+  const handleBuyNow = () => {
+    checkoutWhatsApp([{ ...gun, price: Number(price) || 0, qty }])
+  }
+
+  // Share
+  const shareUrl = buildShareUrl(gun.id || gun.name)
+  const enc = encodeURIComponent
+  const shareLinks = {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${enc(shareUrl)}`,
+    pinterest: `https://pinterest.com/pin/create/button/?url=${enc(shareUrl)}&media=${enc(imgSrc)}&description=${enc(gun.name)}`,
+    x: `https://twitter.com/intent/tweet?url=${enc(shareUrl)}&text=${enc(gun.name)}`,
+  }
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+    } catch {
+      window.prompt('Salin link ini:', shareUrl)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleMessenger = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: gun.name, url: shareUrl })
+        return
+      } catch (err) {
+        if (err.name === 'AbortError') return
+      }
+    }
+    copyLink()
+  }
 
   // Reviews
   const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(gun.id)
@@ -66,19 +120,54 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
 
       {/* Hero */}
       <div className="detail-hero">
-        <img
-          className="detail-img"
-          src={imgSrc}
-          alt={gun.name}
-          onError={(e) => handleImgError(e, gun)}
-        />
+        <div className="detail-media">
+          <img
+            className="detail-img"
+            src={imgSrc}
+            alt={gun.name}
+            onError={(e) => handleImgError(e, gun)}
+          />
+
+          <div className="share-row">
+            <span className="share-label">Share:</span>
+            <button type="button" className="share-ico share-ico--messenger" onClick={handleMessenger} aria-label="Share via Messenger" title="Messenger">
+              <MessageCircle size={14} />
+            </button>
+            <a className="share-ico share-ico--facebook" href={shareLinks.facebook} target="_blank" rel="noreferrer" aria-label="Share to Facebook" title="Facebook">
+              f
+            </a>
+            <a className="share-ico share-ico--pinterest" href={shareLinks.pinterest} target="_blank" rel="noreferrer" aria-label="Share to Pinterest" title="Pinterest">
+              P
+            </a>
+            <a className="share-ico share-ico--x" href={shareLinks.x} target="_blank" rel="noreferrer" aria-label="Share to X" title="X">
+              X
+            </a>
+            <button type="button" className="share-ico share-ico--link" onClick={copyLink} aria-label="Copy link" title="Copy link">
+              {copied ? <Check size={14} /> : <Link2 size={14} />}
+            </button>
+          </div>
+        </div>
+
         <div className="detail-info">
+          <div className="detail-top-actions">
+            <FavoriteButton gunId={gun.id || gun.name} />
+            {onEdit && (
+              <button type="button" className="btn btn--outline btn--sm" onClick={() => onEdit(gun)}>
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button type="button" className="btn btn--danger btn--sm" onClick={() => onDelete(gun)}>
+                Delete
+              </button>
+            )}
+          </div>
+
           <h1 className="display">{gun.name}</h1>
           <p className="type">
             {category}
             {caliber ? ` · ${caliber}` : ''}
           </p>
-          <p className="price detail-price">{formatPrice(price)}</p>
 
           {avgRating > 0 && (
             <p className="detail-rating">
@@ -87,18 +176,42 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
             </p>
           )}
 
-          <div className="detail-actions">
-            <FavoriteButton gunId={gun.id || gun.name} />
-            {onEdit && (
-              <button type="button" className="btn btn--outline" onClick={() => onEdit(gun)}>
-                Edit
+          <p className="price detail-price">{formatPrice(price)}</p>
+
+          <div className="qty-row">
+            <span className="qty-label">Kuantitas</span>
+            <div className="qty-stepper">
+              <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1} aria-label="Kurangi">
+                <Minus size={14} />
               </button>
-            )}
-            {onDelete && (
-              <button type="button" className="btn btn--danger" onClick={() => onDelete(gun)}>
-                Delete
+              <input
+                type="number"
+                min="1"
+                max={maxQty}
+                value={qty}
+                onChange={(e) => {
+                  const v = Number(e.target.value) || 1
+                  setQty(Math.min(maxQty, Math.max(1, v)))
+                }}
+                aria-label="Kuantitas"
+              />
+              <button type="button" onClick={() => setQty((q) => Math.min(maxQty, q + 1))} disabled={qty >= maxQty} aria-label="Tambah">
+                <Plus size={14} />
               </button>
-            )}
+            </div>
+            <span className={`stock-status${hasStock ? '' : ' stock-status--out'}`}>
+              {hasStock ? 'TERSEDIA' : 'HABIS'}
+            </span>
+          </div>
+
+          <div className="buy-row">
+            <button type="button" className="btn-add-cart" onClick={handleAddToCart} disabled={!hasStock}>
+              {added ? <Check size={16} /> : <ShoppingCart size={16} />}
+              {added ? 'Ditambahkan!' : 'Masukkan Keranjang'}
+            </button>
+            <button type="button" className="btn-buy-now" onClick={handleBuyNow} disabled={!hasStock}>
+              Beli Sekarang
+            </button>
           </div>
         </div>
       </div>
