@@ -5,6 +5,24 @@ import { apiClient, IS_SUPABASE } from '../config/api'
 // Supports both Supabase (public.reviews) and university API (/api/v1/recipes/:id/reviews).
 // ---------------------------------------------------------------------------
 
+
+// Fallback localStorage kalau bukan Supabase
+const LOCAL_VOTES_KEY = 'bore_barrel_review_votes'
+const readLocalVotes = () => {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_VOTES_KEY)) || []
+  } catch {
+    return []
+  }
+}
+const writeLocalVotes = (list) => {
+  try {
+    localStorage.setItem(LOCAL_VOTES_KEY, JSON.stringify(list))
+  } catch {
+    /* ignore */
+  }
+}
+
 class ReviewService {
   /**
    * Fetch all reviews for a given product.
@@ -84,6 +102,68 @@ class ReviewService {
     }
 
     return apiClient.delete(`/api/v1/reviews/${reviewId}`)
+  }
+
+  // -------------------------------------------------------------------------
+  // Votes (like / dislike) pada review — tabel public.review_votes
+  // value: 1 = like, -1 = dislike. Satu user hanya punya satu vote per review.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Ambil semua vote untuk sekumpulan review.
+   * @param {Array<string|number>} reviewIds
+   */
+  async getVotes(reviewIds = []) {
+    if (!reviewIds.length) return { success: true, data: [] }
+
+    if (IS_SUPABASE) {
+      const ids = reviewIds.map((id) => encodeURIComponent(String(id))).join(',')
+      const data = await apiClient.get(
+        `/rest/v1/review_votes?review_id=in.(${ids})&select=review_id,user_id,value`,
+      )
+      return { success: true, data: Array.isArray(data) ? data : [] }
+    }
+
+    return { success: true, data: readLocalVotes().filter((v) => reviewIds.map(String).includes(String(v.review_id))) }
+  }
+
+  /**
+   * Simpan (insert atau ganti) vote milik user untuk sebuah review.
+   */
+  async setVote(reviewId, userId, value) {
+    if (IS_SUPABASE) {
+      await apiClient.post(
+        '/rest/v1/review_votes?on_conflict=review_id,user_id',
+        { review_id: reviewId, user_id: userId, value: Number(value) },
+        { headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } },
+      )
+      return { success: true }
+    }
+
+    const rest = readLocalVotes().filter(
+      (v) => !(String(v.review_id) === String(reviewId) && String(v.user_id) === String(userId)),
+    )
+    writeLocalVotes([...rest, { review_id: String(reviewId), user_id: userId, value: Number(value) }])
+    return { success: true }
+  }
+
+  /**
+   * Hapus vote milik user untuk sebuah review (klik tombol yang sama dua kali).
+   */
+  async clearVote(reviewId, userId) {
+    if (IS_SUPABASE) {
+      await apiClient.delete(
+        `/rest/v1/review_votes?review_id=eq.${encodeURIComponent(String(reviewId))}&user_id=eq.${encodeURIComponent(String(userId))}`,
+      )
+      return { success: true }
+    }
+
+    writeLocalVotes(
+      readLocalVotes().filter(
+        (v) => !(String(v.review_id) === String(reviewId) && String(v.user_id) === String(userId)),
+      ),
+    )
+    return { success: true }
   }
 }
 

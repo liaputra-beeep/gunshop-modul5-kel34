@@ -2069,3 +2069,10 @@
   border-color: #c0392b;
   background: rgba(192, 57, 43, 0.08);
 }
+
+.detail-thumbs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 10px;
+  overflow-x: auto;
+}
