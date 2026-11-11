@@ -21,6 +21,7 @@ import {
 } from '../utils/draftStorage'
 import ConfirmModal from '../components/modals/ConfirmModal'
 import MultiImageUploader from '../components/common/MultiImageUploader'
+import { GUN_TYPES } from '../data/gunTypes'
 
 /**
  * CreateGunPage — Create a new weapon / hardware item with image upload,
@@ -264,6 +265,8 @@ export default function CreateGunPage({ onBack, onSuccess }) {
     // Prepare payload compliant with backend /api/v1/recipes schema
     const payload = {
       name: formData.name.trim(),
+      type: formData.type,
+      caliber: formData.caliber.trim(),
       category: formData.category || 'makanan',
       description: formData.description.trim() || `${formData.type} caliber ${formData.caliber}.`,
       image_url: uploadedImageUrl || '/guns/pistol.svg',
@@ -508,10 +511,11 @@ export default function CreateGunPage({ onBack, onSuccess }) {
                 }}
                 className="form-select"
               >
-                <option value="Pistol">Pistol (Sidearm)</option>
-                <option value="Rifle">Rifle (Long Gun)</option>
-                <option value="Shotgun">Shotgun (Smoothbore)</option>
-                <option value="Submachine Gun">Submachine Gun</option>
+                {GUN_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

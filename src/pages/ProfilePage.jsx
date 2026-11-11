@@ -11,6 +11,7 @@ import {
   formatDraftTime,
 } from '../utils/draftStorage'
 import ArchiveSection from '../components/gun/ArchiveSection'
+import MyReviewsSection from '../components/gun/MyReviewsSection'
 import About from './About.jsx'
 import Contact from './Contact.jsx'
 
@@ -29,7 +30,7 @@ const loadDrafts = () =>
     }
   })
 
-export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateCreate }) {
+export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateCreate, onSelectGun }) {
   const [profile] = useState(() => userService.getUserProfile())
   const [copied, setCopied] = useState(false)
   const [drafts, setDrafts] = useState(loadDrafts)
@@ -143,6 +144,9 @@ export default function ProfilePage({ onReplaySplash, onEditProfile, onNavigateC
 
       {/* Archive */}
       <ArchiveSection />
+
+      {/* Riwayat review */}
+      <MyReviewsSection onSelectGun={onSelectGun} />
 
       {/* About */}
       <section className="profile-section" id="about">

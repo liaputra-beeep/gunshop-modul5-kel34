@@ -2076,3 +2076,11 @@
   padding: 10px 16px 10px;
   overflow-x: auto;
 }
+
+/* Tanggal & jam review */
+.review-time {
+  display: block;
+  margin: 2px 0 8px;
+  font-size: 0.78rem;
+  color: var(--steel);
+}

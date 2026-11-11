@@ -51,6 +51,48 @@ class ReviewService {
   }
 
   /**
+   * Riwayat review milik satu user (semua katalog), terbaru dulu.
+   * Tiap item dilengkapi product_name.
+   */
+  async getReviewsByUser(userId) {
+    if (!userId) return { success: true, data: [] }
+
+    if (IS_SUPABASE) {
+      const rows = await apiClient.get(
+        `/rest/v1/reviews?user_id=eq.${encodeURIComponent(String(userId))}&select=*&order=created_at.desc`,
+      )
+      const reviews = Array.isArray(rows) ? rows : []
+      if (reviews.length === 0) return { success: true, data: [] }
+
+      // Ambil nama produk untuk semua review sekaligus
+      const ids = [...new Set(reviews.map((r) => r.product_id))].join(',')
+      let names = {}
+      try {
+        const products = await apiClient.get(`/rest/v1/products?id=in.(${ids})&select=id,name`)
+        names = Object.fromEntries((products || []).map((p) => [String(p.id), p.name]))
+      } catch {
+        /* nama produk opsional */
+      }
+
+      return {
+        success: true,
+        data: reviews.map((r) => ({
+          id: r.id,
+          product_id: r.product_id,
+          product_name: names[String(r.product_id)] || `Katalog #${r.product_id}`,
+          user_id: r.user_id,
+          rating: r.rating,
+          comment: r.comment || '',
+          created_at: r.created_at,
+        })),
+      }
+    }
+
+    // API kampus tidak menyediakan endpoint riwayat per user
+    return { success: true, data: [] }
+  }
+
+  /**
    * Submit a new review.
    * @param {string|number} gunId
    * @param {Object} reviewData  { user_identifier, rating, comment }

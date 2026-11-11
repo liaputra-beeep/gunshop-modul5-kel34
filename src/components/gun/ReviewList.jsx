@@ -16,6 +16,20 @@ const Stars = ({ value, size = 14 }) =>
     />
   ))
 
+/** Format tanggal + jam pengiriman review, mis. "12 Nov 2026, 14.30". */
+const formatDateTime = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export default function ReviewList({ reviews, onChanged }) {
   const me = getUserIdentifier()
 
@@ -199,6 +213,11 @@ export default function ReviewList({ reviews, onChanged }) {
               ) : (
                 <>
                   {rev.comment && <p className="review-comment">{rev.comment}</p>}
+                  {rev.created_at && (
+                    <time className="review-time" dateTime={rev.created_at}>
+                      {formatDateTime(rev.created_at)}
+                    </time>
+                  )}
 
                   <div className="review-actions">
                     {own ? (

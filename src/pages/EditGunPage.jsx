@@ -12,6 +12,7 @@ import {
 import gunService from '../services/gunService'
 import uploadService from '../services/uploadService'
 import MultiImageUploader from '../components/common/MultiImageUploader'
+import { GUN_TYPES } from '../data/gunTypes'
 import {
   saveDraft,
   loadDraft,
@@ -432,10 +433,11 @@ export default function EditGunPage({ gun, gunId, onBack, onSuccess }) {
               }
               className="form-select"
             >
-              <option value="Pistol">Pistol (Sidearm)</option>
-              <option value="Rifle">Rifle (Long Gun)</option>
-              <option value="Shotgun">Shotgun (Smoothbore)</option>
-              <option value="Submachine Gun">Submachine Gun</option>
+              {(GUN_TYPES.includes(formData.type) ? GUN_TYPES : [formData.type, ...GUN_TYPES]).map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </select>
           </div>
         </div>
